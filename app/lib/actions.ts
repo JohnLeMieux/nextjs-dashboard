@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { AuthError } from "next-auth";
 import postgres from "postgres";
 import { z } from "zod";
+import { signIn } from "@/auth";
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
 
@@ -54,7 +56,7 @@ export const createInvoice = async (prevState: State, formData: FormData) => {
       INSERT INTO invoices (customer_id, amount, status, date)
       VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
     `;
-  } catch (error) {
+  } catch (_) {
     return { message: 'Database Error: Failed to Create Invoice.' };
   }
 
@@ -84,7 +86,7 @@ export const updateInvoice = async (id: string, prevState: State, formData: Form
       SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
       WHERE id = ${id}
     `;
-  } catch (error) {
+  } catch (_) {
     return { message: 'Database Error: Failed to Update Invoice.' };
   }
 
@@ -99,4 +101,23 @@ export const deleteInvoice = async (id: string) => {
     console.error(error);
   }
   revalidatePath("/dashboard/invoices");
+};
+
+export const authenticate = async (
+  prevState: string | undefined,
+  formData: FormData
+) => {
+  try {
+    await signIn("credentials", formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid credentials.';
+        default:
+          return 'Something went wrong.';
+      }
+    }
+    throw error;
+  }
 };
